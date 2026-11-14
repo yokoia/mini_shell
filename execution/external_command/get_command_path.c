@@ -1,0 +1,84 @@
+
+#include "../../smash.h"
+
+static char	*search_in_path(t_shell *shell, char *cmd, char **paths)
+{
+	int			i;
+	char		*full_path;
+	char		*temp;
+	int			flag;
+
+	i = 0;
+	flag = 0;
+	while (paths && paths[i])
+	{
+		temp = ft_strjoin(shell, "/", cmd);
+		full_path = ft_strjoin(shell, paths[i], temp);
+		if (full_path && access(full_path, F_OK) == 0)
+		{
+			if (access(full_path, X_OK) == -1)
+				flag = 1;
+			else if (!check_valid_path(full_path))
+				return (full_path);
+		}
+		i++;
+	}
+	if (flag)
+		return (shell->exit_code = 126, \
+			exec_error(shell, cmd, EPERMISS), NULL);
+	shell->exit_code = exec_error(shell, cmd, ECOMMAND);
+	return (NULL);
+}
+
+static char	*handle_absolute_path(t_shell *shell, char *cmd)
+{
+	struct stat	sb;
+
+	if (cmd[0] == '/' || cmd[0] == '.')
+	{
+		if (stat(cmd, &sb) == 0 && access(cmd, F_OK) == 0)
+		{
+			if (access(cmd, X_OK) == -1)
+			{
+				exec_error(shell, cmd, EPERMISS);
+				return (shell->exit_code = 126, NULL);
+			}
+			else
+				return (ft_strdup(shell, cmd));
+		}
+	}
+	return (NULL);
+}
+
+char	*get_command_path(t_shell *shell, char *cmd, t_env *env_list)
+{
+	char	*path_value;
+	char	**paths;
+	char	*result;
+
+	shell->exit_code = 0;
+	result = handle_absolute_path(shell, cmd);
+	if (shell->exit_code && !result)
+		return (result);
+	if (result)
+		return (result);
+	path_value = get_env_var(shell, env_list, "PATH");
+	if (!path_value)
+		return (shell->exit_code = exec_error(shell, cmd, EDIRFILE), NULL);
+	paths = ft_split(shell, path_value, ':');
+	result = search_in_path(shell, cmd, paths);
+	return (result);
+}
+
+void	execve_errors(t_shell *shell, char *cmd)
+{
+	shell->exit_code = 126;
+	if (!ft_strcmp(cmd, ".") || !ft_strcmp(cmd, ".."))
+	{
+		shell->exit_code = exec_error(shell, cmd, ECOMMAND);
+		return ;
+	}
+	if (errno == ENOENT)
+		shell->exit_code = 127;
+	perror("minishell: execve");
+}
